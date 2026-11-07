@@ -157,6 +157,55 @@
   .panel .btns .btn{width:100%;}
   .panel .btns .btn.hidden{display:none;}
 
+  /* ---- 首页次要按钮 / 继续游戏 ---- */
+  .btn.hidden{display:none;}
+  .btn.ghost.wide{font-size:1em;padding:.62em 2.2em;}
+  .btn-row{display:flex;gap:.6em;justify-content:center;flex-wrap:wrap;}
+
+  /* ---- 昵称输入 ---- */
+  .nickrow{display:flex;gap:.45em;width:100%;align-items:center;}
+  .nickrow.hidden{display:none;}
+  .nickrow input{
+    flex:1;min-width:0;font-family:inherit;font-size:.86em;
+    padding:.6em .9em;border-radius:1.4em;
+    border:1.5px solid rgba(230,175,72,.6);
+    background:rgba(255,255,255,.92);color:#6b4f1d;outline:none;text-align:center;
+    letter-spacing:.04em;
+  }
+  .nickrow input::placeholder{color:#c9b487;letter-spacing:0;}
+  .nickrow input:focus{border-color:#e8a93a;box-shadow:0 0 0 .2em rgba(240,180,70,.18);}
+  /* 注意：.panel .btns .btn 有 width:100%，优先级更高，这里必须写全选择器才能压回去 */
+  .panel .btns .nickrow .btn{
+    width:auto;flex:none;
+    padding:.56em 1.15em;font-size:.78em;letter-spacing:.05em;
+    color:#8a6a2e;background:rgba(255,253,243,.95);
+    box-shadow:0 0 0 1.5px rgba(230,175,72,.7);
+  }
+  .panel .btns .nickrow .btn:active{box-shadow:0 0 0 1.5px rgba(230,175,72,.9);transform:translateY(.1em);}
+
+  /* ---- 排行榜 ---- */
+  #boardScreen{z-index:20;}
+  .board{width:100%;max-width:19em;}
+  .board h2{font-size:1.15em;color:#d9931f;letter-spacing:.16em;}
+  .board ol{list-style:none;width:100%;margin:.25em 0 0;padding:0;}
+  .board li{
+    display:flex;align-items:center;gap:.55em;
+    padding:.44em .75em;border-radius:.7em;font-size:.82em;color:#7a5a22;
+  }
+  .board li:nth-child(odd){background:rgba(255,243,214,.66);}
+  .board li .rk{
+    width:1.7em;flex:none;font-weight:800;color:#c9a45c;
+    text-align:center;font-variant-numeric:tabular-nums;
+  }
+  .board li.r1 .rk{color:#e0a11c;font-size:1.12em;}
+  .board li.r2 .rk{color:#a9a49b;font-size:1.06em;}
+  .board li.r3 .rk{color:#c08a4a;font-size:1.06em;}
+  .board li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .board li .sc{font-weight:800;font-variant-numeric:tabular-nums;color:#a8762a;}
+  .board li.empty-tip{
+    justify-content:center;color:#b39a5e;font-size:.78em;background:none;padding:1.1em 0;
+  }
+
   /* 提示气泡 */
   .toast{
     position:absolute;left:50%;top:24%;transform:translate(-50%,-50%) scale(.9);
@@ -223,7 +272,9 @@ window.addEventListener('unhandledrejection', function (e) {
     <img class="hero" id="heroImg" alt="金蕉蛙">
     <div class="title">合成大果蛙</div>
     <div class="subtitle">把果蛙们叠成一只金蕉蛙</div>
+    <button class="btn ghost wide hidden" id="btnResume">继 续 上 一 局</button>
     <button class="btn" id="btnStart">开 始 游 戏</button>
+    <button class="btn ghost" id="btnBoard">排 行 榜</button>
     <div class="hint">
       移动鼠标 / 滑动屏幕 瞄准落点<br>
       点击或松手，果蛙就会掉下来
@@ -238,8 +289,24 @@ window.addEventListener('unhandledrejection', function (e) {
       <div class="bestline">历史最高 <b id="finalBest">0</b></div>
       <div class="record hidden" id="newRecord">🎉 新纪录！</div>
       <div class="btns">
+        <div class="nickrow" id="nickRow">
+          <input id="nickInput" maxlength="12" placeholder="输入昵称，记入排行榜">
+          <button class="btn orange" id="btnSubmit">上 榜</button>
+        </div>
         <button class="btn orange" id="btnRevive">使用复活卡继续</button>
         <button class="btn" id="btnRestart">再 来 一 局</button>
+        <button class="btn ghost" id="btnBoard2">查 看 排 行 榜</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 排行榜 ================= -->
+  <div class="screen hidden" id="boardScreen">
+    <div class="panel board">
+      <h2>排 行 榜</h2>
+      <ol id="boardList"></ol>
+      <div class="btns">
+        <button class="btn" id="btnBoardClose">关 闭</button>
       </div>
     </div>
   </div>
@@ -269,7 +336,8 @@ window.addEventListener('unhandledrejection', function (e) {
 const CFG = {
   W: 440,               // 逻辑画布宽（勿改，代码按 440x720 适配）
   H: 720,               // 逻辑画布高
-  pad: 20,              // 左右墙内缩。贴图 2.0× 后，最大的金蕉蛙贴墙时视觉半径
+  pad: 20,              // [实验版] 碰撞体已等于贴图宽度，pad 留一点呼吸感就够了
+                        // 旧注释：左右的墙角。贴图 2.0× 后，最大的金蕉蛙贴墙时视觉半径
                         // 比碰撞半径多出约 19px（90×2.0×0.885×0.683 − 90 ≈ 18.9），
                         // 这里留 20 刚好，再小大球贴边就会被画布裁掉一块。
   lineY: 158,           // 警戒线高度：果蛙顶部越过这条线并停留会被判负
@@ -286,7 +354,7 @@ const CFG = {
   // （实际内容占 340/384 = 0.885）。所以外观宽度 = 2r × spriteScale × 0.885 × 0.717。
   // 1.62 是"肚子正好填满碰撞圆"的原始值。先试过 ×1.4 = 2.268，重叠太狠，
   // 回收到 2.0（相当于原始值放大 23%），比原来明显大一围，又不至于糊成一团。
-  spriteScale: 2.0,
+  spriteScale: 1.8,
   sfxFromLevel: 4,      // 合成出第 4 级及以上的果蛙时播放音效
   spriteInnerRatio: 340 / 384,   // 贴图内容占贴图方块的比例（跟 makeSprite 里的 pad 联动，改 pad 要同步改这里）
   spriteContentH: 0.95,          // 贴图内容在垂直方向占方图的比例（9 张实测 0.947~0.950）
@@ -296,6 +364,27 @@ const CFG = {
 // 果蛙"看得见的顶端"离圆心有多远（单位 r）。判定越线要用它，不能用 b.r，
 // 否则贴图放大后会出现"明明还没碰到线就输了 / 已经明显越线却不判负"的对不上的情况。
 const VIS_TOP = CFG.spriteScale * CFG.spriteInnerRatio * CFG.spriteContentH;
+
+// 椭圆碰撞体：Matter 没有椭圆刚体，用 20 边凸多边形近似。
+// 半轴直接取贴图的可见半宽 / 半高，这样"看到的边缘"就是"碰到的边缘"，
+// 两颗球靠近时肩膀不会再互相插进去。
+//   半宽 = 2r × spriteScale × spriteInnerRatio × contentW
+//   半高 = 2r × spriteScale × spriteInnerRatio × contentH
+const BODY_N = 20;
+// 贴图的可见半宽 / 半高（相对 r）：2.0 × 0.8854 × 0.70 = 1.240 / × 0.957 = 1.695
+// A 版取全值 —— 碰撞体严格等于画面边缘，任何角度都不重叠；
+// B 版各收一档 —— 肩膀会有一点点接触，看起来不散。
+const BODY_A = 1.017;
+const BODY_B = 1.368;
+
+function ellipseShape(a, b, n){
+  const pts = [];
+  for (let i = 0; i < n; i++){
+    const th = (i + .5) / n * Math.PI * 2;   // 偏移半格，避免顶点正对上下左右
+    pts.push({ x: Math.cos(th) * a, y: Math.sin(th) * b });
+  }
+  return pts;
+}
 
 /* --------------------------------------------------------------------------
    ②  果蛙配置表（9 级，从低到高）
@@ -349,6 +438,7 @@ let state = 'idle';         // idle | playing | over
 const Store = {
   get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
   set(k, v){ try { localStorage.setItem(k, v); } catch (e) {} },
+  remove(k){ try { localStorage.removeItem(k); } catch (e) {} },
 };
 
 let score = 0;
@@ -361,6 +451,7 @@ let aimX = CFG.W / 2;       // 瞄准点
 let dropCD = 0;
 let safeUntil = 0;          // 复活后的保护期
 let isNewRecord = false;
+let submittedThisRound = false;   // 本次结算是否已经上过榜
 let bestAtStart = 0;        // 本局开始时的历史最高分
 let pointerDown = false;
 let lastTS = 0, acc = 0, clock = 0;
@@ -455,6 +546,23 @@ function createWorld(){
   Matter.Events.on(engine, 'collisionStart', evt => {
     for (const pair of evt.pairs){
       const a = pair.bodyA, b = pair.bodyB;
+
+      // ---- Q 弹的第一步：按撞击力度沿法线方向压扁 ----
+      // 真正的"弹"不能只靠 restitution（太弹会一直跳），
+      // 还要有挤压形变再回弹的过程，看起来才像果冻。
+      const nrm = pair.collision && pair.collision.normal;
+      if (nrm){
+        const va = a.velocity || { x:0, y:0 }, vb = b.velocity || { x:0, y:0 };
+        const rel = Math.hypot(va.x - vb.x, va.y - vb.y);
+        const k = Math.min(1, rel / 7);
+        if (k > .05){
+          const ang = Math.atan2(nrm.y, nrm.x);
+          const amt = Math.min(.38, .10 + k * .30);
+          if (a.isFrog){ a.squash = amt; a.squashV = 0; a.squashAng = ang; }
+          if (b.isFrog){ b.squash = amt; b.squashV = 0; b.squashAng = ang; }
+        }
+      }
+
       if (!a.isFrog || !b.isFrog) continue;
       if (a.dead || b.dead || a.merging || b.merging) continue;
       if (a.level !== b.level) continue;
@@ -466,23 +574,30 @@ function createWorld(){
 
 function spawnFruit(level, x, y){
   const info = FRUITS[level-1];
-  const body = Matter.Bodies.circle(x, y, info.r, {
-    restitution: .1,
+  const ha = info.r * BODY_A, hb = info.r * BODY_B;
+  const body = Matter.Bodies.fromVertices(x, y, [ellipseShape(ha, hb, BODY_N)], {
+    restitution: .32,        // 撞一下会弹起来一下，堆叠仍然稳
     friction: .5,
     frictionStatic: .85,
     frictionAir: .004,
     density: .0012,
-    slop: .03,
-  });
+    // 多边形之间容易出现细小抖动，slop 给大一点，让接触更"软"
+    slop: .08,
+  }, true);
   // 锁定旋转：人形果蛙一旦横躺会很难看，锁死后永远是正立的玩偶。
   // 把 CFG.lockRotation 改成 false 就能看到它们翻滚的样子。
   if (CFG.lockRotation) Matter.Body.setInertia(body, Infinity);
   body.isFrog = true;
   body.level = level;
-  body.r = info.r;
+  body.r = info.r;      // 视觉半径基准：贴图、越线判定都用它
+  body.hw = ha;         // 碰撞体的水平半轴
+  body.hh = hb;         // 碰撞体的垂直半轴
   body.merging = false;
   body.dead = false;
   body.pop = 0;        // 0→1 的弹出动画进度
+  body.squash = 0;     // Q 弹形变量：正=沿法线压扁
+  body.squashV = 0;    // 形变速度（弹簧用）
+  body.squashAng = 0;  // 形变轴（碰撞法线角度）
   body.age = 0;
   body.armed = false;  // 是否已落过警戒线（免疫解除）
   body.overAcc = 0;    // 越线累计时间
@@ -605,17 +720,21 @@ function handleMerge(a, b){
     addBurst(mx, my, '#ffd15c', 26, 1.8);
     addBurst(mx, my, '#fff3c4', 14, 1.2);
     playMergeSfx(MAX_LEVEL);
+    saveGame();
     return;
   }
 
   // 常规合成：升一级
   const nl = lvl + 1;
   if (nl >= CFG.sfxFromLevel) playMergeSfx(nl);   // 第 4 级起有声音，等级越高音调越高
-  const nb = spawnFruit(nl, clamp(mx, CFG.pad + FRUITS[nl-1].r, CFG.W - CFG.pad - FRUITS[nl-1].r), my);
+  const nr = FRUITS[nl-1];
+  const nhw = nr.r * BODY_A;
+  const nb = spawnFruit(nl, clamp(mx, CFG.pad + nhw, CFG.W - CFG.pad - nhw), my);
   Matter.Body.setVelocity(nb, { x:vx, y: vy - 1.6 });
   addScore(FRUITS[nl-1].score);
   addPopup(mx, my, '+' + FRUITS[nl-1].score, FRUITS[nl-1].color);
   addBurst(mx, my, FRUITS[nl-1].color, 12, 1);
+  saveGame();
 }
 
 /* --------------------------------------------------------------------------
@@ -664,7 +783,7 @@ function setAim(clientX){
   const rect = cv.getBoundingClientRect();
   const x = (clientX - rect.left) / rect.width * CFG.W;
   const r = FRUITS[holdLevel-1].r;
-  aimX = clamp(x, CFG.pad + r, CFG.W - CFG.pad - r);
+  aimX = clamp(x, CFG.pad + r * BODY_A, CFG.W - CFG.pad - r * BODY_A);
 }
 
 function drop(){
@@ -676,6 +795,7 @@ function drop(){
   nextLevel = randLevel();
   dropCD = CFG.cooldown;
   refreshNext();
+  saveGame();
   addBurst(aimX, CFG.dropY + FRUITS[holdLevel-1].r * .4, '#cfe9d8', 5, .5);
 }
 
@@ -711,6 +831,15 @@ function afterPhysics(dt){
     b.age += dt;
     if (b.pop < 1) b.pop = Math.min(1, b.pop + dt * 5.5);
 
+    // Q 弹的第二步：欠阻尼弹簧，压下去以后会回弹过冲、再收住，抖两下才停
+    if (b.squash !== 0 || b.squashV !== 0){
+      b.squashV += (-b.squash * 300 - b.squashV * 13) * dt;
+      b.squash += b.squashV * dt;
+      if (Math.abs(b.squash) < .003 && Math.abs(b.squashV) < .05){
+        b.squash = 0; b.squashV = 0;
+      }
+    }
+
     // 用"看得见的顶端"判定，而不是碰撞圆顶端：贴图比碰撞圆高，用 b.r 会让玩家觉得判负莫名其妙
     const top = b.position.y - b.r * VIS_TOP;
     // 免疫：刚投放/刚合成的果蛙要先"落到线下"或超过 2.5 秒才参与判定
@@ -744,6 +873,7 @@ const btnRevive = document.getElementById('btnRevive');
 function triggerGameOver(){
   if (state !== 'playing') return;
   state = 'over';
+  clearSave();          // 这一局结束了，存档作废（用了复活卡会重新写一份）
 
   isNewRecord = score > bestAtStart;   // 本局是否刷新了历史记录
   bestEl.textContent = best;
@@ -755,6 +885,17 @@ function triggerGameOver(){
   const left = Math.max(0, cardsEarned - cardsUsed);
   btnRevive.textContent = '使用复活卡继续（剩 ' + left + '）';
   btnRevive.classList.toggle('hidden', left <= 0);
+
+  submittedThisRound = false;
+
+  // 每次结算都把昵称输入露出来，预填上次用过的名字
+  const nr = document.getElementById('nickRow');
+  const inp = document.getElementById('nickInput');
+  if (nr) nr.classList.remove('hidden');
+  if (inp){
+    inp.disabled = false;
+    inp.value = Store.get(NICK_KEY, '');
+  }
 
   overScreen.classList.remove('hidden');
 }
@@ -813,6 +954,154 @@ function resetGame(){
 
   state = 'playing';
   overScreen.classList.add('hidden');
+  clearSave();          // 新开一局，旧存档作废
+}
+
+/* --------------------------------------------------------------------------
+   ⑫-1  存档：关掉页面/退出浏览器，下次打开还能接着上一局
+   只存必要的几个数：分数、复活卡、手里/预览的两只、每颗球的位置与朝向。
+   物理引擎自己的状态没法序列化，恢复时按存下来的数据重建刚体。
+   -------------------------------------------------------------------------- */
+const SAVE_KEY = 'frog_save_v1';
+let lastSaveAt = 0;
+
+function saveGame(force){
+  if (state !== 'playing' || !world) return;
+  const now = Date.now();
+  // 合成可能连着触发好几次，没必要每次都写盘
+  if (!force && now - lastSaveAt < 600) return;
+  lastSaveAt = now;
+  try{
+    const balls = [];
+    for (const b of fruits.values()){
+      balls.push([
+        b.level,
+        Math.round(b.position.x * 10) / 10,
+        Math.round(b.position.y * 10) / 10,
+        Math.round(b.angle * 1000) / 1000,
+        b.armed ? 1 : 0,
+      ]);
+    }
+    Store.set(SAVE_KEY, JSON.stringify({
+      v: 1,
+      score: score,
+      cardsEarned: cardsEarned,
+      cardsUsed: cardsUsed,
+      holdLevel: holdLevel,
+      nextLevel: nextLevel,
+      bestAtStart: bestAtStart,
+      balls: balls,
+      ts: Date.now(),
+    }));
+  }catch(e){}
+}
+
+function readSave(){
+  try{
+    const raw = Store.get(SAVE_KEY, '');
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || d.v !== 1 || !Array.isArray(d.balls) || d.balls.length === 0) return null;
+    return d;
+  }catch(e){ return null; }
+}
+
+function clearSave(){ Store.remove(SAVE_KEY); }
+
+// 首页那颗"继续上一局"按钮：有存档才露出来
+function refreshResumeBtn(){
+  const btn = document.getElementById('btnResume');
+  if (!btn) return;
+  const d = readSave();
+  if (d && d.balls.length){
+    btn.classList.remove('hidden');
+    btn.textContent = '继 续 上 一 局 · ' + (d.score | 0) + ' 分';
+  } else {
+    btn.classList.add('hidden');
+  }
+}
+
+function resumeGame(d){
+  if (!d) return;
+  // 先按常规新开一局把场地清干净，再把存档里的东西盖回去
+  resetGame();
+  score = d.score | 0;
+  cardsEarned = d.cardsEarned | 0;
+  cardsUsed = d.cardsUsed | 0;
+  holdLevel = clamp(d.holdLevel | 0, 1, MAX_LEVEL);
+  nextLevel = clamp(d.nextLevel | 0, 1, MAX_LEVEL);
+  bestAtStart = d.bestAtStart | 0;
+
+  for (const p of d.balls){
+    const lv = clamp(p[0] | 0, 1, MAX_LEVEL);
+    const b = spawnFruit(lv, p[1], p[2]);
+    Matter.Body.setAngle(b, p[3] || 0);
+    Matter.Body.setVelocity(b, { x:0, y:0 });
+    b.pop = 1;          // 不要播弹出动画
+    b.age = 99;         // 跳过落地免疫期
+    b.armed = !!p[4];
+  }
+
+  scoreEl.textContent = score;
+  bestEl.textContent = best;
+  refreshCardUI();
+  refreshNext();
+  aimX = CFG.W / 2;
+  safeUntil = performance.now() + 900;
+  state = 'playing';
+  saveGame();
+}
+
+/* --------------------------------------------------------------------------
+   ⑫-2  排行榜
+   目前存在本机浏览器里（localStorage），换设备看不到同一个榜。
+   要跨设备共享，得接一个后端数据库。
+   -------------------------------------------------------------------------- */
+const BOARD_KEY = 'frog_board_v1';
+const NICK_KEY = 'frog_nick';
+
+function getBoard(){
+  try{
+    const a = JSON.parse(Store.get(BOARD_KEY, '[]'));
+    if (!Array.isArray(a)) return [];
+    return a.filter(function(x){ return x && typeof x.s === 'number'; });
+  }catch(e){ return []; }
+}
+
+function addBoardEntry(name, s){
+  const list = getBoard();
+  list.push({ n: name, s: s | 0, t: Date.now() });
+  list.sort(function(a, b){ return b.s - a.s || a.t - b.t; });
+  const top = list.slice(0, 30);
+  Store.set(BOARD_KEY, JSON.stringify(top));
+  return top;
+}
+
+function escHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+function renderBoard(){
+  const ol = document.getElementById('boardList');
+  if (!ol) return;
+  const list = getBoard().slice(0, 10);
+  if (!list.length){
+    ol.innerHTML = '<li class="empty-tip">还没有人上榜，快去玩一局</li>';
+    return;
+  }
+  const out = [];
+  for (let i = 0; i < list.length; i++){
+    out.push(
+      '<li class="r' + (i + 1) + '">' +
+        '<span class="rk">' + (i + 1) + '</span>' +
+        '<span class="nm">' + escHtml(list[i].n) + '</span>' +
+        '<span class="sc">' + list[i].s + '</span>' +
+      '</li>'
+    );
+  }
+  ol.innerHTML = out.join('');
 }
 
 /* --------------------------------------------------------------------------
@@ -974,6 +1263,16 @@ function drawOne(body){
   ctx.save();
   ctx.translate(body.position.x, body.position.y);
   ctx.rotate(body.angle);
+
+  // Q 弹变形：沿碰撞法线方向压短、垂直方向鼓出
+  const sq = body.squash || 0;
+  if (sq > .004 || sq < -.004){
+    const rel = (body.squashAng || 0) - body.angle;
+    ctx.rotate(rel);
+    ctx.scale(1 + sq * .75, 1 - sq * .75);
+    ctx.rotate(-rel);
+  }
+
   if (sp){
     // 极淡的暖色投影，让黄色系果蛙在暖黄背景上也能分离出来
     ctx.shadowColor = 'rgba(158,116,42,.28)';
@@ -1042,7 +1341,10 @@ function render(dt){
   // 而不是两颗球咬着彼此的边。顺便 clip 一下，旋转时贴图不会压到边框上。
   ctx.save();
   ctx.beginPath();
-  ctx.rect(CFG.pad - 2, 0, CFG.W - CFG.pad * 2 + 4, CFG.H);
+  // 贴图半宽比碰撞半轴大 0.099r（贴图故意画得比碰撞体宽一点点），
+  // 球贴墙时贴图会伸到墙外 9px 左右。原来裁到 pad-2 会把这一条切掉，
+  // 所以放宽到 pad-14，让它自然压着边框，而不是被生生切断。
+  ctx.rect(CFG.pad - 14, 0, CFG.W - CFG.pad * 2 + 28, CFG.H);
   ctx.clip();
   const order = [];
   for (const b of fruits.values()) order.push(b);
@@ -1181,6 +1483,68 @@ function bindUI(){
       setSfxOn(!sfxOn);
     });
   }
+  // ---- 继续上一局 ----
+  const btnResume = document.getElementById('btnResume');
+  if (btnResume){
+    btnResume.addEventListener('click', () => {
+      const d = readSave();
+      if (!d){ refreshResumeBtn(); return; }
+      if (!ready){
+        try { if (!world) createWorld(); ready = true; }
+        catch (err) { fatal(err); return; }
+      }
+      hudEl.style.opacity = '1';
+      startScreen.classList.add('hidden');
+      initSfx();
+      resumeGame(d);
+    });
+  }
+
+  // ---- 排行榜 ----
+  const btnBoard = document.getElementById('btnBoard');
+  if (btnBoard) btnBoard.addEventListener('click', () => {
+    renderBoard();
+    document.getElementById('boardScreen').classList.remove('hidden');
+  });
+  const btnBoard2 = document.getElementById('btnBoard2');
+  if (btnBoard2) btnBoard2.addEventListener('click', () => {
+    renderBoard();
+    document.getElementById('boardScreen').classList.remove('hidden');
+  });
+  const btnBoardClose = document.getElementById('btnBoardClose');
+  if (btnBoardClose) btnBoardClose.addEventListener('click', () => {
+    document.getElementById('boardScreen').classList.add('hidden');
+  });
+
+  // ---- 上榜 ----
+  const btnSubmit = document.getElementById('btnSubmit');
+  if (btnSubmit) btnSubmit.addEventListener('click', () => {
+    if (submittedThisRound) return;      // 一次结算只记一条，防止重复点击
+    submittedThisRound = true;
+    const inp = document.getElementById('nickInput');
+    let name = ((inp && inp.value) || '').trim().slice(0, 12);
+    if (!name) name = '无名玩家';
+    Store.set(NICK_KEY, name);
+    addBoardEntry(name, score);
+    const nr = document.getElementById('nickRow');
+    if (nr) nr.classList.add('hidden');
+    if (inp) inp.disabled = true;
+    showToast('已记入排行榜');
+  });
+  const inpNick = document.getElementById('nickInput');
+  if (inpNick) inpNick.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); btnSubmit && btnSubmit.click(); }
+  });
+
+  // ---- 离开页面时把进度落盘 ----
+  const flush = () => saveGame(true);
+  window.addEventListener('pagehide', flush);
+  window.addEventListener('beforeunload', flush);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+  setInterval(() => saveGame(), 3000);   // 兜底
+
+  refreshResumeBtn();   // 有存档才显示"继续上一局"
+
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', () => setTimeout(layout, 120));
 }
